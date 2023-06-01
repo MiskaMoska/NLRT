@@ -5,14 +5,15 @@ from maptools.core import NNModelArch, CTG
 from maptools import MapPlotter
 from acg import ACG
 from layout_designer import LayoutDesigner
+from conflict_analysis import get_conflit_metrics
 
 # 读取onnx模型，注意你自己的路径
 nvcim_root = os.environ.get('NVCIM_HOME')
-model_path = os.path.join(nvcim_root, "onnx_models/simp-resnet18.onnx")
+model_path = os.path.join(nvcim_root, "onnx_models/simp-yolo.onnx")
 model = onnx.load(model_path)
 
 # 创建onnx转换器
-oc = OnnxConverter(model, arch=NNModelArch.RESNET)
+oc = OnnxConverter(model, arch=NNModelArch.YOLO_V3)
 
 # 执行转换
 oc.run_conversion()
@@ -25,7 +26,7 @@ oc.run_conversion()
 og = oc.device_graph
 
 # 创建xbar映射器
-tm = TileMapper(og, 256, 256*5)
+tm = TileMapper(og, 64, 64*5)
 
 # 执行映射
 tm.run_map()
@@ -36,20 +37,22 @@ tm.print_config()
 # 获得映射得到的CTG
 ctg = tm.ctg
 
-# ctg.plot_ctg()
-
-for i, cluster in ctg.clusters:
-    print(i, cluster)
-
-acg = ACG(7, 7)
-ld = LayoutDesigner(ctg, acg)
-
+cnt = 0
+total_list = []
 while True:
-    ld.init_layout()
-    ld.run_layout()
-    if ld.is_patches(ld.hotmap):
-        ld.plot_result()
-        pass
-    else:
-        ld.plot_result()
-        # break
+    # 创建NoC映射器
+    nm = NocMapper(ctg,7,10)
+
+    # 执行映射
+    nm.run_map()
+
+    totalc, maxc = get_conflit_metrics([nm.cast_paths, nm.gather_paths])
+    total_list.append((totalc, maxc))
+    # print(f"totalc: {totalc}\tmaxc: {maxc}")
+    cnt += 1
+    if cnt > 100:
+        break
+
+for totalc, maxc in total_list:
+    print(f"totalc: {totalc}\tmaxc: {maxc}")
+
