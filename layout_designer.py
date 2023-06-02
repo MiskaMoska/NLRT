@@ -131,8 +131,8 @@ class LayoutDesigner(object):
         This method searched through a cluster and marks physical tiles 
         as many as possible following a patch-manner, if the number of 
         marked tiles equals the number of tiles in the current cluster, 
-        it means the current cluster is mapped to a patch, 
-        otherwise, it is not mapped to a patch.
+        it means the current cluster is mapped to a patch, otherwise, 
+        it is not mapped to a patch.
 
         Parameters
         ----------
@@ -182,6 +182,10 @@ class LayoutDesigner(object):
             self.search_cluster(x, inv_x, cluster_id, (tile[0], tile[1]+1), marked)
 
     def is_patches(self, x: CIR2PhyIdxMap) -> bool:
+        '''
+        This method checks the valadity of the given layout pattern,
+        that is, whether all clusters are mapped to a patch region.
+        '''
         inv_x = {v: k for k, v in x.items()}
 
         for cluster_id, num in enumerate(self.cluster_list):
