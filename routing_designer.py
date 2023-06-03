@@ -18,5 +18,4 @@ class RoutingDesigner(object):
         self.noc_w = acg.w
         self.noc_h = acg.h
 
-    def 
         
