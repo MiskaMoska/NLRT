@@ -6,6 +6,37 @@ from maptype import *
 import networkx as nx
 from typing import List, Tuple, Literal
 from functools import cached_property
+from maptools.core import CTG
+from layout_designer import LayoutResult
+from acg import ACG
+
+def random_steiner_tree_code(
+    term_nodes: List[PhysicalTile],
+    all_nodes: List[PhysicalTile]
+) -> 'SteinerTreeCode':
+    visited_nodes = []
+    edge_list, spis = [], []
+
+    remain_nodes = term_nodes.copy()
+    init_node = random.choice(term_nodes)
+    visited_nodes.append(init_node)
+    remain_nodes.remove(init_node)
+
+    for _ in range(len(term_nodes) - 1):
+        select_node = random.choice(visited_nodes)
+        target_node = random.choice(remain_nodes)
+        edge_list.append((select_node, target_node))
+        spis.append(random.choice([True, False]))
+
+        remain_nodes.remove(target_node)
+        visited_nodes.append(target_node)
+
+    return SteinerTreeCode(
+        edge_list, spis,
+        random.choice(term_nodes),
+        term_nodes, all_nodes
+    )
+
 
 class SteinerTreeCode(nx.Graph):
 
@@ -81,6 +112,7 @@ class SteinerTreeCode(nx.Graph):
 
     def mutation(self) -> None:
         method = random.choice([True, False])
+        method = True
         print(f"mutation method: ", "edge replacement" if method else "root relocation")
 
         if method: # replace edge
@@ -104,10 +136,11 @@ class SteinerTreeCode(nx.Graph):
             self.node_color[r] = 'green'
             self.root = r
 
-    def decode(self) -> None:
+    def decode(self) -> nx.Graph:
         self._decode_to_raw_steiner()
         self._decode_to_true_steiner(method='dfs')
         self._decode_to_true_steiner(method='bfs')
+        return self.tstg_b
 
     def _decode_to_raw_steiner(self) -> None:
         self.rstg = nx.Graph() # raw steiner tree graph
@@ -156,7 +189,7 @@ class SteinerTreeCode(nx.Graph):
             self.tstg_b = nx.Graph() # true steiner tree graph by bfs
             self.tstg_b.add_nodes_from(self.all_nodes)
             visited_nodes = []
-            self._bfs(self.rstg, self.tstg_b, self.root, visited_nodes)        
+            self._bfs(self.rstg, self.tstg_b, self.root, visited_nodes)
     
     def _dfs(
         self,
@@ -246,3 +279,31 @@ class SteinerTreeCode(nx.Graph):
         ax4.set_title('steiner dfs', y=-0.1)
 
 
+class RoutingPatternCode():
+
+    def __init__(self, ctg: CTG, acg: ACG, layout: LayoutResult) -> None:
+        self.noc_w = acg.w
+        self.noc_h = acg.h
+        self.all_nodes = acg.nodes
+
+        self.stc_dict: Dict[str, SteinerTreeCode] = {} # steiner tree code dict
+        self.src_dict: Dict[str, PhysicalTile] = {} # src node dict
+        self.sid_dict: Dict[str, int] = {} # stream ID dict
+        self.path_dict: Dict[str, List[MeshEdge]] = {} # communication path dict
+
+        for sid, (c, src, dst) in enumerate(ctg.cast_trees):
+            physrc = layout[src]
+            phydst = [layout[d] for d in dst]
+            term_nodes = phydst + [physrc]
+            self.stc_dict[c] = random_steiner_tree_code(
+                term_nodes, self.all_nodes
+            )
+            self.src_dict[c] = physrc
+            self.sid_dict[c] = sid
+
+    def decode(self) -> None:
+        for comm, stc in self.stc_dict.items():
+            tstg: nx.Graph = stc.decode()
+            tree: nx.DiGraph = nx.bfs_tree(tstg, self.src_dict[comm])
+            self.path_dict[comm] = list(tree.edges)
+            

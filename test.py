@@ -5,6 +5,8 @@ from maptools.core import NNModelArch, CTG
 from maptools import MapPlotter
 from acg import ACG
 from layout_designer import LayoutDesigner
+from routing_designer import RoutingDesigner
+from encoding import RoutingPatternCode
 
 # 读取onnx模型，注意你自己的路径
 nvcim_root = os.environ.get('NVCIM_HOME')
@@ -25,7 +27,7 @@ oc.run_conversion()
 og = oc.device_graph
 
 # 创建xbar映射器
-tm = TileMapper(og, 256, 256*5)
+tm = TileMapper(og, 256, 128*5)
 
 # 执行映射
 tm.run_map()
@@ -38,18 +40,14 @@ ctg = tm.ctg
 
 # ctg.plot_ctg()
 
-for i, cluster in ctg.clusters:
-    print(i, cluster)
-
-acg = ACG(7, 7)
+acg = ACG(10, 11)
 ld = LayoutDesigner(ctg, acg)
 
-while True:
-    ld.init_layout()
-    ld.run_layout()
-    if ld.is_patches(ld.hotmap):
-        ld.plot_result()
-        pass
-    else:
-        ld.plot_result()
-        # break
+ld.init_layout()
+ld.run_layout()
+layout = ld.layout_result
+layout.draw()
+rd = RoutingDesigner(ctg, acg, layout)
+routing = rd.routing_result
+routing.draw()
+

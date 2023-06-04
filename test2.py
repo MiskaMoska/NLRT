@@ -4,9 +4,9 @@ test the locality of mutation operation for STC
 
 from encoding import *
 
-W = 5
-H = 5
-T = 10
+W = 7
+H = 7
+T = 5
 
 candidate_nodes = [(x, y) for x in range(W) for y in range(H)]
 node_pos = {(x, y) : (x * 1, y * 1) for x in range(W) for y in range(H)}
