@@ -5,17 +5,22 @@ import numpy as np
 from graphviz import Graph as ZGraph
 from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
-from typing import List, Dict, Tuple, Literal
-from maptype import CIRTile, CIR2PhyIdxMap, Logical2PhysicalMap
+from typing import List, Dict, Tuple, Literal, Optional, Union
+from maptype import CIRTile, CIR2PhyIdxMap, Logical2PhysicalMap, DLEMethod
 from functools import cached_property
 from itertools import combinations as comb
-from csa import ClusterSimulatedAnnealing
-
-__all__ = ['LayoutDesigner', 'LayoutResult']
+from algorithm import LayoutSimulatedAnnealing
+from layout_result import LayoutResult
+from dle import ReversesDLE, BaseDLE, __DLE_ACCESS_TABLE__
 
 class LayoutDesigner(object):
 
-    def __init__(self, ctg: CTG, acg: ACG) -> None:
+    def __init__(
+        self, 
+        ctg: CTG, 
+        acg: ACG,         
+        dle: Optional[DLEMethod] = None
+    ) -> None:
         '''
         Tile-NoC Layout Designer
         Determines the 1-to-1 mapping between logical tile and physical tiles
@@ -27,7 +32,18 @@ class LayoutDesigner(object):
 
         acg: ACG
             Architecture Characterization Graph of the NoC.
+
+        dle: Optional[DLEMethod]
+            To specify the Deterministic Layout Engine.
+            When `dle` is None, the optimization algorithm is default to be enabled
+            to search for the best layout.
+            When `dle` is not None, it must be one of the predefined DLEs, and the 
+            optimization algorithm is disabled, while the task of layout is handed 
+            over to the specified DLE.
         '''
+        # The layout engine for layout task
+        self.layout_engine: Union[BaseDLE, LayoutSimulatedAnnealing]
+
         # A list of all logical tiles
         self.log_tiles: List[LogicalTile]
 
@@ -74,6 +90,7 @@ class LayoutDesigner(object):
         self.cluster_list = []
         self.cir_tiles = []
         self.log_dict = {}
+        self.hotmap = {}
 
         for i, (_, tiles) in enumerate(self.ctg_clusters):
             self.cluster_list.append(len(tiles))
@@ -82,14 +99,35 @@ class LayoutDesigner(object):
                 self.cir_tiles.append(cir_tile)
                 self.log_dict[cir_tile] = tile
 
-        self.hotmap = {}
-        self.init_layout()
+        self.init_layout_engine(dle, ctg, acg)
 
-    def init_layout(self) -> None:
+    def init_layout_engine(
+        self, 
+        dle: Optional[DLEMethod], 
+        ctg: CTG, 
+        acg: ACG
+    ) -> None:
+        if dle is not None: # use determininstic layout engine
+            self.layout_engine = __DLE_ACCESS_TABLE__[dle](ctg, acg)
+
+        else: # use optimization layout engine
+            self.init_layout_for_ole()
+            self.layout_engine = LayoutSimulatedAnnealing(
+                self.obj_func, 
+                self.hotmap,
+                T_max=1e-2, 
+                T_min=1e-10, 
+                L=10, 
+                max_stay_counter=150,
+                silent=True  
+            )
+
+    def init_layout_for_ole(self) -> None:
         '''
         This method re-initializes the layout pattern by
         resetting the hotmap to random values.
-        Call this method before launching a new round of optimization.
+        This method is defined for optimization layout engine and 
+        call this method before launching a new round of optimization.
         '''
         temp_phy_indices = self.phy_indices.copy()
         random.shuffle(temp_phy_indices)
@@ -111,6 +149,12 @@ class LayoutDesigner(object):
         return res
 
     def obj_func(self, x: CIR2PhyIdxMap) -> float:
+        '''
+        objective function for optimization algorithms.
+        the function is implemented here rather than in algorithm classes
+        because the function is generic for all algorithms (such as SA and GA),
+        and it needs global variables in `LayoutDesigner` to execute. 
+        '''
         total_dist = 0
         for i, num in enumerate(self.cluster_list):
             for s, d in comb(list(range(num)), 2):
@@ -201,17 +245,8 @@ class LayoutDesigner(object):
         return True
 
     def run_layout(self) -> None:
-        sa = ClusterSimulatedAnnealing(
-            self.obj_func, 
-            self.hotmap,
-            T_max=1e-2, 
-            T_min=1e-10, 
-            L=10, 
-            max_stay_counter=150,
-            silent=True  
-        )
-        sa.run()
-        self.hotmap = sa.best_x
+        self.hotmap = self.layout_engine()
+        print(self.hotmap)
         print(f"is_patches: {self.is_patches(self.hotmap)}")
 
     @property
@@ -223,102 +258,3 @@ class LayoutDesigner(object):
             self.log_dict,
             self.phy_dict
         )
-
-
-class LayoutResult(object):
-
-    def __init__(
-        self,
-        noc_w: int,
-        noc_h: int,
-        hotmap: Dict[CIRTile, int],
-        log_dict: Dict[CIRTile, LogicalTile],
-        phy_dict: Dict[int, PhysicalTile]
-    ) -> None:
-        self.noc_w = noc_w
-        self.noc_h = noc_h
-        self.hotmap = hotmap
-        self.log_dict = log_dict
-        self.phy_dict = phy_dict
-        self._prepare_tile_color()
-
-        self.l2p_map = (
-            {log_dict[cir]:  phy_dict[hotmap[cir]] 
-            for cir in hotmap.keys()}
-        )
-        
-    def __getitem__(self, log_tile: LogicalTile) -> PhysicalTile:
-        return self.l2p_map[log_tile]
-
-    def _prepare_tile_color(self) -> None:
-        dark_colors = [
-            color for _, color in mcolors.CSS4_COLORS.items() 
-            if all(c <= 0.7 for c in mcolors.to_rgb(color))
-        ]
-        k = len(self.hotmap) // len(dark_colors) + 1
-        self.colors = (dark_colors * k)[:len(self.hotmap)]
-    
-    def draw(self, engine: Literal['fdp', 'mplt'] = 'fdp') -> None:
-        # draw through matplotlib
-        if engine == 'mplt': 
-            plt.figure(figsize=(self.noc_w, self.noc_h))
-            for cir, pidx in self.hotmap.items():
-                phytile = self.phy_dict[pidx]
-                self._draw_tile_mplt(phytile, cir[0], self.colors[cir[0]])
-
-            plt.show()
-
-        # draw through graphviz fdp
-        elif engine == 'fdp':
-            fdp = ZGraph('layout', engine='fdp', format='pdf')
-            self.draw_fdp(fdp)
-            fdp.render(cleanup=True, directory='.', view=True)
-
-    @staticmethod
-    def _draw_tile_mplt(
-        phytile: PhysicalTile, 
-        cid: int, 
-        color: str
-    ) -> None:
-        w = 0.8
-        x, y = phytile
-        y = -y
-        linewidth = 4
-
-        plt.plot([x,x+w], [y,y], color=color, linewidth=linewidth)
-        plt.plot([x+w,x+w], [y,y+w], color=color, linewidth=linewidth)
-        plt.plot([x+w,x], [y+w,y+w], color=color, linewidth=linewidth)
-        plt.plot([x,x], [y+w,y], color=color, linewidth=linewidth)
-        
-        plt.text(
-            x + w/2, y + w/2,
-            'C'+str(cid),
-            fontsize=15,
-            verticalalignment='center', 
-            horizontalalignment='center', 
-            color=color,
-            fontweight='bold'
-        )
-
-    def draw_fdp(
-        self, fdp: ZGraph,
-        width: str = '0.8',
-        penwidth: str = '5',
-        fontsize: str ='24',
-        dist: int = 1
-    ) -> None:
-        for cir, pidx in self.hotmap.items():
-            phytile = self.phy_dict[pidx]
-            pos = f'{phytile[0] * dist},{-phytile[1] * dist}!'
-            fdp.node(
-                str(phytile), 
-                f'C{cir[0]}', 
-                color=self.colors[cir[0]],
-                fontcolor=self.colors[cir[0]],
-                pos=pos,
-                shape='square',
-                width=width,
-                penwidth=penwidth,
-                fontsize=fontsize,
-                fontname='Arial'
-            )

@@ -7,7 +7,7 @@ import networkx as nx
 from typing import List, Tuple, Literal
 from functools import cached_property
 from maptools.core import CTG
-from layout_designer import LayoutResult
+from layout_result import LayoutResult
 from acg import ACG
 
 def random_steiner_tree_code(
@@ -113,7 +113,7 @@ class SteinerTreeCode(nx.Graph):
     def mutation(self) -> None:
         method = random.choice([True, False])
         method = True
-        print(f"mutation method: ", "edge replacement" if method else "root relocation")
+        # print(f"mutation method: ", "edge replacement" if method else "root relocation")
 
         if method: # replace edge
             edge = random.choice(list(self.edges))
@@ -286,22 +286,34 @@ class RoutingPatternCode():
         self.noc_h = acg.h
         self.all_nodes = acg.nodes
 
+        self.comms: List[str] = [] # stores all comms
         self.stc_dict: Dict[str, SteinerTreeCode] = {} # steiner tree code dict
         self.src_dict: Dict[str, PhysicalTile] = {} # src node dict
         self.sid_dict: Dict[str, int] = {} # stream ID dict
+        self.term_dict: Dict[str, List[PhysicalTile]] = {} # terminal nodes dict
         self.path_dict: Dict[str, List[MeshEdge]] = {} # communication path dict
 
         for sid, (c, src, dst) in enumerate(ctg.cast_trees):
             physrc = layout[src]
             phydst = [layout[d] for d in dst]
             term_nodes = phydst + [physrc]
-            self.stc_dict[c] = random_steiner_tree_code(
-                term_nodes, self.all_nodes
-            )
+            self.term_dict[c] = term_nodes
+
+            self.comms.append(c)
             self.src_dict[c] = physrc
             self.sid_dict[c] = sid
 
+            self._init_routing()
+
+    def _init_routing(self) -> None:
+        for comm in self.comms:
+            term_nodes = self.term_dict[comm]
+            self.stc_dict[comm] = random_steiner_tree_code(
+                term_nodes, self.all_nodes
+            )
+
     def decode(self) -> None:
+        self.path_dict = {}
         for comm, stc in self.stc_dict.items():
             tstg: nx.Graph = stc.decode()
             tree: nx.DiGraph = nx.bfs_tree(tstg, self.src_dict[comm])

@@ -6,7 +6,7 @@ from encoding import *
 
 W = 7
 H = 7
-T = 5
+T = 23
 
 candidate_nodes = [(x, y) for x in range(W) for y in range(H)]
 node_pos = {(x, y) : (x * 1, y * 1) for x in range(W) for y in range(H)}
