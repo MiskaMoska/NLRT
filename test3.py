@@ -2,13 +2,6 @@ from graphviz import Digraph
 from queue import Queue
 from copy import deepcopy
 
-class A:
-    def __init__(self) -> None:
-        self.queue = Queue()
+a = [1,2,3]
 
-a = A()
-
-a = [1,2,3,4]
-
-a.pop(-1)
-print(a)
+print(a.remove(3))

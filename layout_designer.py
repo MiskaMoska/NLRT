@@ -37,7 +37,7 @@ class LayoutDesigner(object):
         dle: Optional[DLEMethod]
             To specify the Deterministic Layout Engine.
             When `dle` is None, the optimization algorithm is default to be enabled
-            to search for the best layout.
+            to search for the best layout pattern.
             When `dle` is not None, it must be one of the predefined DLEs, and the 
             optimization algorithm is disabled, while the task of layout is handed 
             over to the specified DLE.
@@ -48,14 +48,9 @@ class LayoutDesigner(object):
         
         self.acg_nodes = acg.nodes
         self.lpc = LayoutPatternCode(ctg, acg)
-        self.init_layout_engine(dle, ctg, acg)
+        self._init_layout_engine(dle)
 
-    def init_layout_engine(
-        self, 
-        dle: Optional[DLEMethod], 
-        ctg: CTG, 
-        acg: ACG
-    ) -> None:
+    def _init_layout_engine(self, dle: Optional[DLEMethod]) -> None:
         if dle is not None: # use determininstic layout engine
             self.layout_engine = __DLE_ACCESS_TABLE__[dle](self.lpc)
 

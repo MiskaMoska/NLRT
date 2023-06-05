@@ -2,16 +2,23 @@ import random
 from maptools.core import CTG, LogicalTile, PhysicalTile
 from acg import ACG
 import numpy as np
-from typing import List, Dict, Tuple, Any
-from maptype import CIRTile, CIR2PhyIdxMap, Logical2PhysicalMap
+from typing import List, Dict, Tuple, Any, Optional
+from maptype import DREMethod
 from layout_designer import LayoutResult
 from encoding import RoutingPatternCode
 from algorithm import RoutingSimulatedAnnealing
 from routing_result import RoutingResult
+from dre import __DRE_ACCESS_TABLE__
 
 class RoutingDesigner(object):
 
-    def __init__(self, ctg: CTG, acg: ACG, layout: LayoutResult) -> None:
+    def __init__(
+        self, 
+        ctg: CTG, 
+        acg: ACG, 
+        layout: LayoutResult,
+        dre: Optional[DREMethod] = None
+    ) -> None:
         '''
         Tile-NoC Layout Designer
         Determines the 1-to-1 mapping between logical tile and physical tiles
@@ -26,11 +33,35 @@ class RoutingDesigner(object):
 
         layout: LayoutResult
             layout result from `LayoutDesigner`.
+
+        dre: Optional[DREMethod]
+            To specify the Deterministic Routing Engine.
+            When `dre` is None, the optimization algorithm is default to be enabled
+            to search for the best routing pattern.
+            When `dre` is not None, it must be one of the predefined DREs, and the 
+            optimization algorithm is disabled, while the task of routing is handed 
+            over to the specified DRE.
         '''
         self.noc_w = acg.w
         self.noc_h = acg.h
         self.layout = layout
         self.rpc = RoutingPatternCode(ctg, acg, layout)
+        self._init_routing_engine(dre)
+
+    def _init_routing_engine(self, dre: Optional[DREMethod]) -> None:
+        if dre is not None: # use determininstic routing engine
+            self.routing_engine = __DRE_ACCESS_TABLE__[dre](self.rpc)
+
+        else: # use optimization routing engine
+            self.routing_engine = RoutingSimulatedAnnealing(
+                self.obj_func, 
+                self.rpc,
+                T_max=1e-4, 
+                T_min=1e-10, 
+                L=10, 
+                max_stay_counter=1000,
+                silent=False
+            )
 
     def obj_func(self, x: RoutingPatternCode) -> float:
         '''
@@ -53,16 +84,7 @@ class RoutingDesigner(object):
         # return max(conflicts)
 
     def run_routing(self) -> None:
-        sa = RoutingSimulatedAnnealing(
-            self.obj_func, 
-            self.rpc,
-            T_max=1e-4, 
-            T_min=1e-10, 
-            L=10, 
-            max_stay_counter=1000,
-            silent=False
-        )
-        self.rpc = sa()
+        self.rpc = self.routing_engine()
 
     @property
     def routing_result(self) -> RoutingResult:

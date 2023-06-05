@@ -8,7 +8,7 @@ from maptype import CIR2PhyIdxMap, DLEMethod
 
 class BaseDLE(Callable, metaclass=ABCMeta):
     '''
-    Base class for Deterministic Layout Engine
+    Base Class for Deterministic Layout Engine
     '''
     def __init__(self, lpc: LayoutPatternCode) -> None:
         self.lpc = lpc

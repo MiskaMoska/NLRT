@@ -10,3 +10,8 @@ MeshEdge = Tuple[PhysicalTile, PhysicalTile]
 
 class DLEMethod(Enum):
     REVERSE_S = 0
+
+class DREMethod(Enum):
+    DYXY = 0
+    RPM = 1
+    OCR = 2

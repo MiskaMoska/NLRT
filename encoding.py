@@ -549,4 +549,7 @@ class RoutingPatternCode(BaseCode):
             self.stc_dict[comm] = random_steiner_tree_code(
                 term_nodes, self.all_nodes
             )
+    
+    def empty_decode_queue(self) -> None:
+        self.decode_queue = []
             

@@ -7,7 +7,7 @@ from acg import ACG
 from layout_designer import LayoutDesigner
 from routing_designer import RoutingDesigner
 from encoding import RoutingPatternCode
-from maptype import DLEMethod
+from maptype import DLEMethod, DREMethod
 
 # 读取onnx模型，注意你自己的路径
 nvcim_root = os.environ.get('NVCIM_HOME')
@@ -47,7 +47,7 @@ ld = LayoutDesigner(ctg, acg, dle=None)
 ld.run_layout()
 layout = ld.layout_result
 
-rd = RoutingDesigner(ctg, acg, layout)
+rd = RoutingDesigner(ctg, acg, layout, dre=DREMethod.DYXY)
 rd.run_routing()
 
 routing = rd.routing_result
