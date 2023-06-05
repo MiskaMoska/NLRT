@@ -28,6 +28,18 @@ class RoutingResult(object):
         k = len(self.path_dict) // len(dark_colors) + 1
         self.colors = (dark_colors * k)[:len(self.path_dict)]
 
+    @property
+    def max_conflicts(self) -> int:
+        freq_dict = {}
+        for path in self.path_dict.values():
+            for edge in path:
+                if edge not in freq_dict:
+                    freq_dict[edge] = 0
+                freq_dict[edge] += 1
+        
+        conflicts = list(freq_dict.values())
+        return max(conflicts)
+
     def draw(self) -> None:
         fdp = ZDigraph('routing', engine='fdp', format='pdf')
         # draw layout tiles

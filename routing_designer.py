@@ -30,15 +30,7 @@ class RoutingDesigner(object):
         self.noc_w = acg.w
         self.noc_h = acg.h
         self.layout = layout
-        self.hotrtg = RoutingPatternCode(ctg, acg, layout)
-
-    def _init_routing(self) -> None:
-        '''
-        This method re-initializes the routing pattern by
-        re-randomizing the STCs in the hotrtg.
-        Call this method before launching a new round of optimization.
-        '''
-        self.hotrtg._init_routing()
+        self.rpc = RoutingPatternCode(ctg, acg, layout)
 
     def obj_func(self, x: RoutingPatternCode) -> float:
         '''
@@ -57,22 +49,22 @@ class RoutingDesigner(object):
                 freq_dict[edge] += 1
         
         conflicts = list(freq_dict.values())
-        return sum(conflicts) / len(conflicts)
+        return sum(conflicts) / len(conflicts) + max(conflicts) - 1
         # return max(conflicts)
 
     def run_routing(self) -> None:
         sa = RoutingSimulatedAnnealing(
             self.obj_func, 
-            self.hotrtg,
-            T_max=1e-2, 
+            self.rpc,
+            T_max=1e-4, 
             T_min=1e-10, 
             L=10, 
-            max_stay_counter=150,
+            max_stay_counter=1000,
             silent=False
         )
-        self.hotrtg = sa()
+        self.rpc = sa()
 
     @property
-    def routing_result(self) -> 'RoutingResult':
-        self.hotrtg.decode()
-        return RoutingResult(self.layout, self.hotrtg)
+    def routing_result(self) -> RoutingResult:
+        self.rpc.decode()
+        return RoutingResult(self.layout, self.rpc)

@@ -39,20 +39,19 @@ ctg = tm.ctg
 
 cnt = 0
 total_list = []
+best_maxc = 10000
 while True:
     # 创建NoC映射器
-    nm = NocMapper(ctg,7,10)
+    nm = NocMapper(ctg,8,9)
 
     # 执行映射
     nm.run_map()
-
-    totalc, maxc = get_conflit_metrics([nm.cast_paths, nm.gather_paths])
-    total_list.append((totalc, maxc))
-    # print(f"totalc: {totalc}\tmaxc: {maxc}")
+    totalc, maxc = get_conflit_metrics([nm.cast_paths])
+    if maxc < best_maxc:
+        best_maxc = maxc
+    print(f"cnt: {cnt}\tbest_maxc: {best_maxc}")
     cnt += 1
-    if cnt > 100:
-        break
 
-for totalc, maxc in total_list:
-    print(f"totalc: {totalc}\tmaxc: {maxc}")
+# for totalc, maxc in total_list:
+#     print(f"totalc: {totalc}\tmaxc: {maxc}")
 

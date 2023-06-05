@@ -1,16 +1,19 @@
 from maptype import *
-from typing import Any
-from encoding import RoutingPatternCode
+from typing import Any, TypeVar
+from encoding import LayoutPatternCode, RoutingPatternCode
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import random
+from copy import deepcopy, copy
 
-class BaseSimulatedAnnealing(Callable, metaclass=ABCMeta):
+Solution = TypeVar('Solution')
+
+class BaseSimulatedAnnealing(Generic[Solution], Callable, metaclass=ABCMeta):
 
     def __init__(
         self, 
-        func: Callable, 
-        x0: Any, 
+        func: Callable[[Solution], float], 
+        x0: Solution, 
         T_max: float = 100,
         T_min: float = 1e-7, 
         L: int = 300, 
@@ -26,12 +29,12 @@ class BaseSimulatedAnnealing(Callable, metaclass=ABCMeta):
         
         Parameters
         ----------
-        func: Callable
+        func: Callable[[Solution], float]
             the objective function to be optimized.
             this function must have a scalar-value output
             and the goal is to minimize (not maximize) the function output.
             
-        x0: Any
+        x0: Solution
             initial solution, must be the same type with the input of `func`.
 
         T_max: float
@@ -65,24 +68,24 @@ class BaseSimulatedAnnealing(Callable, metaclass=ABCMeta):
         self.best_y = self.func(self.best_x)
         self.T = self.T_max
         self.iter_cycle = 0
-        self.generation_best_X, self.generation_best_Y = [self.best_x], [self.best_y]
-
-        # history reasons, will be deprecated
-        self.best_x_history, self.best_y_history = self.generation_best_X, self.generation_best_Y
+        self.generation_best_Y = [self.best_y]
 
     def isclose(self, a, b, rel_tol=1e-09, abs_tol=1e-30) -> bool:
         return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
     @abstractmethod
-    def get_new_x(self, x: Any) -> Any: ...
+    def update(self, x: Solution) -> None: ...
+
+    @abstractmethod
+    def undo_update(self, x: Solution) -> None: ...
 
     @abstractmethod
     def cool_down(self) -> None: ...
 
-    def __call__(self) -> Tuple[Any, float]:
+    def __call__(self) -> Solution:
         return self.run()
 
-    def run(self) -> Any:
+    def run(self) -> Solution:
         x_current, y_current = self.best_x, self.best_y
         stay_counter = 0
 
@@ -93,23 +96,26 @@ class BaseSimulatedAnnealing(Callable, metaclass=ABCMeta):
                 print("stay_counter: ", stay_counter)
 
             for i in range(self.L):
-                x_new = self.get_new_x(x_current)
-                y_new = self.func(x_new)
+                self.update(x_current)
+                y_new = self.func(x_current)
 
                 # Metropolis
                 df = y_new - y_current
-                if df < 0 or np.exp(-df / self.T) > np.random.rand():
-                    x_current, y_current = x_new, y_new
-                    if y_new < self.best_y:
-                        self.best_x, self.best_y = x_new, y_new
+                if df < 0 or np.exp(-df / self.T) > np.random.rand(): # accept new x
+                    y_current = y_new
+                    if y_new < self.best_y: # record best x
+                        self.best_x = deepcopy(x_current)
+                        self.best_y = y_new
+
+                else: # discard new x
+                    self.undo_update(x_current)
 
             self.iter_cycle += 1
             self.cool_down()
             self.generation_best_Y.append(self.best_y)
-            self.generation_best_X.append(self.best_x)
 
             # if best_y stay for max_stay_counter times, stop iteration
-            if self.isclose(self.best_y_history[-1], self.best_y_history[-2]):
+            if self.isclose(self.generation_best_Y[-1], self.generation_best_Y[-2]):
                 stay_counter += 1
             else:
                 stay_counter = 0
@@ -123,25 +129,25 @@ class BaseSimulatedAnnealing(Callable, metaclass=ABCMeta):
         return self.best_x
 
 
-class LayoutSimulatedAnnealing(BaseSimulatedAnnealing):
+class LayoutSimulatedAnnealing(BaseSimulatedAnnealing[LayoutPatternCode]):
 
-    def get_new_x(self, x: CIR2PhyIdxMap) -> CIR2PhyIdxMap:
-        x_new = x.copy()
-        k1, k2 = random.sample(list(x_new.keys()), 2)
-        x_new[k1], x_new[k2] = x_new[k2], x_new[k1]
-        return x_new
+    def update(self, x: LayoutPatternCode) -> None:
+        x.mutation()
+    
+    def undo_update(self, x: LayoutPatternCode) -> None:
+        x.undo_mutation()
 
     def cool_down(self) -> None:
         self.T = self.T_max / (1 + np.log(1 + self.iter_cycle))
 
 
-class RoutingSimulatedAnnealing(BaseSimulatedAnnealing):
+class RoutingSimulatedAnnealing(BaseSimulatedAnnealing[RoutingPatternCode]):
 
-    def get_new_x(self, x: RoutingPatternCode) -> RoutingPatternCode:
-        comm = random.choice(x.comms) # randomly choose a communication
-        stc = x.stc_dict[comm] # get the handler the corresponding STC
-        stc.mutation() # perform mutation on the STC
-        return x
+    def update(self, x: RoutingPatternCode) -> None:
+        x.mutation()
+
+    def undo_update(self, x: RoutingPatternCode) -> None:
+        x.undo_mutation()
 
     def cool_down(self) -> None:
         self.T = self.T_max / (1 + np.log(1 + self.iter_cycle))

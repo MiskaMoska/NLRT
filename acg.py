@@ -12,4 +12,4 @@ class ACG(object):
 
     @property
     def nodes(self) -> List[PhysicalTile]:
-        return [(i, j) for i in range(self.w) for j in range(self.h)]
+        return [(i, j) for j in range(self.h) for i in range(self.w)]

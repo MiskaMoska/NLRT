@@ -41,16 +41,18 @@ ctg = tm.ctg
 
 # ctg.plot_ctg()
 
-acg = ACG(7, 7)
-ld = LayoutDesigner(ctg, acg, dle=DLEMethod.REVERSE_S)
+acg = ACG(6, 8)
+ld = LayoutDesigner(ctg, acg, dle=None)
 
 ld.run_layout()
 layout = ld.layout_result
-# layout.draw()
+
 rd = RoutingDesigner(ctg, acg, layout)
 rd.run_routing()
 
-layout.draw()
 routing = rd.routing_result
+print(routing.max_conflicts)
+
+layout.draw()
 routing.draw()
 

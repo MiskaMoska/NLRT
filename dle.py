@@ -3,35 +3,40 @@ from maptools.core import CTG, PhysicalTile
 from acg import ACG
 from abc import ABCMeta, abstractmethod
 from random import shuffle
+from encoding import LayoutPatternCode
 from maptype import CIR2PhyIdxMap, DLEMethod
 
 class BaseDLE(Callable, metaclass=ABCMeta):
     '''
     Base class for Deterministic Layout Engine
     '''
-    def __init__(self, ctg: CTG, acg: ACG) -> None:
-        self.noc_w = acg.w
-        self.noc_h = acg.h
-        self.clusters = list(ctg.clusters)
+    def __init__(self, lpc: LayoutPatternCode) -> None:
+        self.lpc = lpc
+        self.noc_w = lpc.noc_w
+        self.noc_h = lpc.noc_h
+        self.cluster_list = lpc.cluster_list
 
-    def __call__(self) -> CIR2PhyIdxMap:
-        return self.map_tiles()
+    def __call__(self) -> LayoutPatternCode:
+        return self._map_tiles()
 
     @abstractmethod
     def generate_path(self) -> List[int]: ...
         
-    def map_tiles(self) -> CIR2PhyIdxMap:
+    def _map_tiles(self) -> LayoutPatternCode:
         map_dict = {}
         path = self.generate_path()
-        for cidx, (base, cluster) in enumerate(self.clusters):
-            id_list = list(range(len(cluster)))
-            shuffle(id_list) # random mapping
+
+        base = 0
+        for cidx, num in enumerate(self.cluster_list):
+            id_list = list(range(num))
+            shuffle(id_list)
             for i, tidx in enumerate(id_list):
                 map_dict[(cidx, tidx)] = path[base + i]
+            base += num
 
-        print(map_dict)
-        return map_dict
-            
+        self.lpc.map = map_dict.copy()
+        return self.lpc
+        
 
 class ReversesDLE(BaseDLE):
 

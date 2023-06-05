@@ -6,28 +6,22 @@ from graphviz import Graph as ZGraph
 from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
 from typing import List, Dict, Tuple, Literal
-from maptype import CIRTile
+from maptype import *
+from encoding import LayoutPatternCode
 
 class LayoutResult(object):
 
-    def __init__(
-        self,
-        noc_w: int,
-        noc_h: int,
-        hotmap: Dict[CIRTile, int],
-        log_dict: Dict[CIRTile, LogicalTile],
-        phy_dict: Dict[int, PhysicalTile]
-    ) -> None:
-        self.noc_w = noc_w
-        self.noc_h = noc_h
-        self.hotmap = hotmap
-        self.log_dict = log_dict
-        self.phy_dict = phy_dict
+    def __init__(self, lpc: LayoutPatternCode) -> None:
+        self.noc_w = lpc.noc_w
+        self.noc_h = lpc.noc_h
+        self.map = lpc.map
+        self.log_dict = lpc.log_dict
+        self.phy_dict = lpc.phy_dict
         self._prepare_tile_color()
 
         self.l2p_map = (
-            {log_dict[cir]:  phy_dict[hotmap[cir]] 
-            for cir in hotmap.keys()}
+            {self.log_dict[cir]:  self.phy_dict[self.map[cir]] 
+            for cir in self.map.keys()}
         )
         
     def __getitem__(self, log_tile: LogicalTile) -> PhysicalTile:
@@ -38,14 +32,14 @@ class LayoutResult(object):
             color for _, color in mcolors.CSS4_COLORS.items() 
             if all(c <= 0.7 for c in mcolors.to_rgb(color))
         ]
-        k = len(self.hotmap) // len(dark_colors) + 1
-        self.colors = (dark_colors * k)[:len(self.hotmap)]
+        k = len(self.map) // len(dark_colors) + 1
+        self.colors = (dark_colors * k)[:len(self.map)]
     
     def draw(self, engine: Literal['fdp', 'mplt'] = 'fdp') -> None:
         # draw through matplotlib
         if engine == 'mplt': 
             plt.figure(figsize=(self.noc_w, self.noc_h))
-            for cir, pidx in self.hotmap.items():
+            for cir, pidx in self.map.items():
                 phytile = self.phy_dict[pidx]
                 self._draw_tile_mplt(phytile, cir[0], self.colors[cir[0]])
 
@@ -90,7 +84,7 @@ class LayoutResult(object):
         fontsize: str ='24',
         dist: int = 1
     ) -> None:
-        for cir, pidx in self.hotmap.items():
+        for cir, pidx in self.map.items():
             phytile = self.phy_dict[pidx]
             pos = f'{phytile[0] * dist},{-phytile[1] * dist}!'
             fdp.node(

@@ -4,11 +4,12 @@ import matplotlib
 from matplotlib import pyplot as plt
 from maptype import *
 import networkx as nx
-from typing import List, Tuple, Literal
+from typing import List, Tuple, Literal, Any
 from functools import cached_property
 from maptools.core import CTG
-from layout_result import LayoutResult
 from acg import ACG
+from abc import ABCMeta, abstractmethod
+from copy import deepcopy
 
 def random_steiner_tree_code(
     term_nodes: List[PhysicalTile],
@@ -38,7 +39,186 @@ def random_steiner_tree_code(
     )
 
 
-class SteinerTreeCode(nx.Graph):
+class BaseCode(metaclass=ABCMeta):
+    '''
+    Base Class for Encoded Data Structures 
+    '''
+    @abstractmethod
+    def mutation(self) -> None: ...
+
+    @abstractmethod
+    def undo_mutation(self) -> None: ...
+
+    @abstractmethod
+    def decode(self) -> Any: ...
+
+    @abstractmethod
+    def reset(self) -> None: ...
+
+
+class LayoutPatternCode(BaseCode):
+
+    def __init__(
+        self,
+        ctg: CTG,
+        acg: ACG,
+    ) -> None:
+        '''
+        Encoded Data Structure for Layout Pattern.
+
+        Parameter
+        ---------
+        ctg: CTG
+            Communication Trace Graph of the AI task.
+
+        acg: ACG
+            Architecture Characterization Graph of the NoC.
+        '''
+        # A list of the number of tiles in each cluster
+        self.cluster_list: List[int] = []
+
+        # A list of cluster-index-represented (CIR) tiles
+        self.cir_tiles: List[CIRTile] = []
+
+        # A list of indices of all physical tiles
+        self.phy_indices: List[int] = []
+
+        # A dictionary with CIR tiles as keys and logical tile as values
+        self.log_dict: Dict[CIRTile, LogicalTile] = {}
+
+        # A dictionary with physical tiles indices as keys and physical tiles as values
+        self.phy_dict: Dict[int, PhysicalTile] = {}
+
+        # A dictionary with physical tile as keys and physical tile indices as values
+        # This is the inverted-mapped version of `self.phy_dict`
+        self.inv_phy_dict: Dict[PhysicalTile, int] = {}
+
+        # The core data structure of LPC
+        # A dictionary with CIR tiles as keys and physical tile indices as values
+        self.map: CIR2PhyIdxMap = {}
+
+        self.noc_w, self.noc_h = acg.w, acg.h
+        self.phy_indices = list(range(len(acg.nodes)))
+        self.phy_dict = {i: n for i, n in enumerate(acg.nodes)}
+        self.inv_phy_dict = {n: i for i, n in enumerate(acg.nodes)}
+
+        for i, (_, tiles) in enumerate(ctg.clusters):
+            self.cluster_list.append(len(tiles))
+            for k, tile in enumerate(tiles):
+                cir_tile = (i, k)
+                self.cir_tiles.append(cir_tile)
+                self.log_dict[cir_tile] = tile
+
+        self.reset()
+
+    def mutation(self) -> None:
+        k1, k2 = random.sample(list(self.map.keys()), 2)
+        self.last_swap = (k1, k2)
+        self.map[k1], self.map[k2] = self.map[k2], self.map[k1]
+
+    def undo_mutation(self) -> None:
+        k1, k2 = self.last_swap
+        self.map[k1], self.map[k2] = self.map[k2], self.map[k1]
+
+    def decode(self) -> None:
+        '''
+        The LPC is actually a simple dictionary and does not need decoding,
+        so this function is not used 
+        '''
+        return
+    
+    def reset(self) -> None:
+        random.shuffle(self.phy_indices)
+        for i, cir in enumerate(self.cir_tiles):
+            self.map[cir] = self.phy_indices[i]
+
+    def _search_cluster(
+        self,
+        x: CIR2PhyIdxMap, 
+        inv_x: Dict[int, CIRTile], 
+        cluster_id: int,
+        tile: PhysicalTile, 
+        marked: List[int]
+    ) -> None:
+        '''
+        This method searched through a cluster and marks physical tiles 
+        as many as possible following a patch-manner, if the number of 
+        marked tiles equals the number of tiles in the current cluster, 
+        it means the current cluster is mapped to a patch, otherwise, 
+        it is not mapped to a patch.
+
+        Parameters
+        ----------
+        x: CIR2PhyIdxMap
+            the layout pattern
+
+        inv_x: Dict[int, CIRTile]
+            the inverted-mapped version of `x`
+
+        cluster_id: int
+            the cluster ID of the current cluster being searched
+        
+        tile: PhysicalTile
+            the current physical tile being searched
+
+        marked: List[int]
+            a list of the physical tile indices that have been marked
+        '''
+        pidx = self.inv_phy_dict[tile]
+        if pidx in inv_x: 
+            logic = inv_x[pidx]
+            if logic[0] != cluster_id: # belongs to other cluster
+                return
+        else: # an idle tile that is not mapped
+            return
+        
+        if pidx in marked: # already marked
+            return
+        
+        # If a physical tile meets three requirements:
+        # 1. A tile that has been mapped
+        # 2. A tile belonging to the current cluster
+        # 3. A tile that is not marked yet
+        # then current physical tile should be marked
+        marked.append(pidx)
+
+        if tile[0] != 0:
+            self._search_cluster(x, inv_x, cluster_id, (tile[0]-1, tile[1]), marked)
+
+        if tile[0] != self.noc_w-1:
+            self._search_cluster(x, inv_x, cluster_id, (tile[0]+1, tile[1]), marked)
+
+        if tile[1] != 0:
+            self._search_cluster(x, inv_x, cluster_id, (tile[0], tile[1]-1), marked)
+
+        if tile[1] != self.noc_h-1:
+            self._search_cluster(x, inv_x, cluster_id, (tile[0], tile[1]+1), marked)
+    
+    def _all_clusters_in_a_patch(self) -> bool:
+        '''
+        This method checks the valadity of the given layout pattern,
+        that is, whether all clusters are mapped to a patch region.
+        '''
+        inv_x = {v: k for k, v in self.map.items()}
+
+        for cluster_id, num in enumerate(self.cluster_list):
+            start_cir = (cluster_id, 0)
+            start_phy_tile = self.phy_dict[self.map[start_cir]]
+
+            marked = []
+            self._search_cluster(self.map, inv_x, cluster_id, start_phy_tile, marked)
+            if len(marked) != num:
+                print(f'non-patch detected at cluster {cluster_id}')
+                return False
+            
+        return True
+    
+    @property
+    def is_valid(self) -> bool:
+        return self._all_clusters_in_a_patch()
+
+
+class SteinerTreeCode(BaseCode, nx.Graph):
 
     def __init__(
         self, 
@@ -50,7 +230,7 @@ class SteinerTreeCode(nx.Graph):
         *args, **kwargs
     ) -> None:
         '''
-        Encoding Data Structure of Steiner Tree
+        Encoded Data Structure for Steiner Tree.
         
         Parameters
         ----------
@@ -105,7 +285,7 @@ class SteinerTreeCode(nx.Graph):
         for (edge, spi) in zip(edges, spis):
             self.add_edge(*edge, spi=spi)
 
-        self.node_pos = {n: n for n in self.all_nodes}
+        self.node_pos = {n: (n[0], -n[1]) for n in self.all_nodes}
         self.node_color = {n: 'red' if n in self.term_nodes 
                             else 'black' for n in self.all_nodes}
         self.node_color[self.root] = 'green'
@@ -132,15 +312,29 @@ class SteinerTreeCode(nx.Graph):
                 r = random.choice(self.term_nodes)
                 if r != self.root: break
 
-            self.node_color[self.root] = 'red'
-            self.node_color[r] = 'green'
-            self.root = r
+            # self.node_color[self.root] = 'red'
+            # self.node_color[r] = 'green'
+            # self.root = r
+
+    def undo_mutation(self) -> None:
+        '''
+        The mutation operation of STC not inversable,
+        so this function is not used.
+        '''
+        return
 
     def decode(self) -> nx.Graph:
         self._decode_to_raw_steiner()
-        self._decode_to_true_steiner(method='dfs')
+        # self._decode_to_true_steiner(method='dfs')
         self._decode_to_true_steiner(method='bfs')
         return self.tstg_b
+    
+    def reset(self) -> None:
+        '''
+        The STC does not support resetting, the resetting is achieved 
+        by RPC by calling the function `random_steiner_tree_code`.
+        '''
+        return
 
     def _decode_to_raw_steiner(self) -> None:
         self.rstg = nx.Graph() # raw steiner tree graph
@@ -279,20 +473,39 @@ class SteinerTreeCode(nx.Graph):
         ax4.set_title('steiner dfs', y=-0.1)
 
 
-class RoutingPatternCode():
+class RoutingPatternCode(BaseCode):
 
-    def __init__(self, ctg: CTG, acg: ACG, layout: LayoutResult) -> None:
+    def __init__(self, ctg: CTG, acg: ACG, layout: Any) -> None:
+        '''
+        Encoded Data Structure for Routing Pattern.
+        Assembling multiple STCs (Steiner Tree Code), each for a communication
+        obtained from `ctg`, the node matching is obtained from `layout`.
+        
+        Parameters
+        ----------
+        ctg: CTG
+            Communication Trace Graph of the AI Task.
+
+        acg: ACG
+            Architecture Characterization Graph of the NoC.
+
+        layout: LayoutResult
+            Layout result from obtained from `LayoutDesigner`.
+        '''
         self.noc_w = acg.w
         self.noc_h = acg.h
         self.all_nodes = acg.nodes
 
         self.comms: List[str] = [] # stores all comms
+        self.decode_queue: List[str] = [] # stores all comms to be decoded
+
         self.stc_dict: Dict[str, SteinerTreeCode] = {} # steiner tree code dict
         self.src_dict: Dict[str, PhysicalTile] = {} # src node dict
         self.sid_dict: Dict[str, int] = {} # stream ID dict
         self.term_dict: Dict[str, List[PhysicalTile]] = {} # terminal nodes dict
         self.path_dict: Dict[str, List[MeshEdge]] = {} # communication path dict
 
+        # initialize dictionaries
         for sid, (c, src, dst) in enumerate(ctg.cast_trees):
             physrc = layout[src]
             phydst = [layout[d] for d in dst]
@@ -302,20 +515,38 @@ class RoutingPatternCode():
             self.comms.append(c)
             self.src_dict[c] = physrc
             self.sid_dict[c] = sid
+        
+        # inintialize update queue
+        for comm in self.comms:
+            self.decode_queue.append(comm)
+        
+        self.reset()
 
-            self._init_routing()
+    def mutation(self) -> None:
+        comm = random.choice(self.comms)
+        target_stc = self.stc_dict[comm]
+        self.bak_comm = comm
+        self.bak_stc = deepcopy(target_stc)
+        target_stc.mutation()
+        self.decode_queue.append(comm)
 
-    def _init_routing(self) -> None:
+    def undo_mutation(self) -> None:
+        self.stc_dict[self.bak_comm] = self.bak_stc
+        self.decode_queue.append(self.bak_comm)
+
+    def decode(self) -> None:
+        while len(self.decode_queue) > 0:
+            comm = self.decode_queue[-1]
+            self.decode_queue.pop(-1)
+            stc = self.stc_dict[comm]
+            tstg: nx.Graph = stc.decode()
+            tree: nx.DiGraph = nx.bfs_tree(tstg, self.src_dict[comm])
+            self.path_dict[comm] = list(tree.edges)
+
+    def reset(self) -> None:
         for comm in self.comms:
             term_nodes = self.term_dict[comm]
             self.stc_dict[comm] = random_steiner_tree_code(
                 term_nodes, self.all_nodes
             )
-
-    def decode(self) -> None:
-        self.path_dict = {}
-        for comm, stc in self.stc_dict.items():
-            tstg: nx.Graph = stc.decode()
-            tree: nx.DiGraph = nx.bfs_tree(tstg, self.src_dict[comm])
-            self.path_dict[comm] = list(tree.edges)
             
