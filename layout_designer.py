@@ -68,7 +68,7 @@ class LayoutDesigner(object):
     @cached_property
     def ptdm(self) -> np.ndarray:
         '''
-        physical tile distance matrix (PTDM)
+        Physical Tile Distance Matrix (PTDM)
         '''
         res = np.zeros([len(self.acg_nodes)]*2)
         for i, s in enumerate(self.acg_nodes):
@@ -81,7 +81,7 @@ class LayoutDesigner(object):
 
     def obj_func(self, x: LayoutPatternCode) -> float:
         '''
-        objective function for optimization algorithms.
+        Objective function for optimization algorithms.
         the function is implemented here rather than in algorithm classes
         because the function is generic for all algorithms (such as SA and GA),
         and it needs global variables in `LayoutDesigner` to execute. 
@@ -98,6 +98,9 @@ class LayoutDesigner(object):
     def run_layout(self) -> None:
         self.lpc = self.layout_engine()
         print(f"is_valid: {self.lpc.is_valid}")
+
+    def reset(self) -> None:
+        self.layout_engine.reset()
 
     @property
     def layout_result(self) -> 'LayoutResult':

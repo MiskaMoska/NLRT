@@ -28,7 +28,7 @@ oc.run_conversion()
 og = oc.device_graph
 
 # 创建xbar映射器
-tm = TileMapper(og, 256, 256*5)
+tm = TileMapper(og, 128, 128*5)
 
 # 执行映射
 tm.run_map()
@@ -41,18 +41,31 @@ ctg = tm.ctg
 
 # ctg.plot_ctg()
 
-acg = ACG(6, 8)
-ld = LayoutDesigner(ctg, acg, dle=None)
+acg = ACG(14, 14)
+ld = LayoutDesigner(ctg, acg, dle=DLEMethod.REVERSE_S)
 
 ld.run_layout()
 layout = ld.layout_result
 
-rd = RoutingDesigner(ctg, acg, layout, dre=DREMethod.DYXY)
+rd = RoutingDesigner(ctg, acg, layout, dre=None)
 rd.run_routing()
 
 routing = rd.routing_result
 print(routing.max_conflicts)
 
-layout.draw()
+# layout.draw()
 routing.draw()
+
+# rd = RoutingDesigner(ctg, acg, layout, dre=None)
+
+# max = 1000
+# cnt = 0
+# while True:
+#     rd.run_routing()
+#     now_max = rd.obj_func(rd.rpc)
+#     if now_max < max:
+#         max = now_max
+#     print(cnt, '\t', max)
+#     rd.reset()
+#     cnt += 1
 

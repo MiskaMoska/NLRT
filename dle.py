@@ -36,6 +36,8 @@ class BaseDLE(Callable, metaclass=ABCMeta):
 
         self.lpc.map = map_dict.copy()
         return self.lpc
+
+    def reset(self) -> None: ...
         
 
 class ReversesDLE(BaseDLE):

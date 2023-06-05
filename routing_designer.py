@@ -56,21 +56,21 @@ class RoutingDesigner(object):
             self.routing_engine = RoutingSimulatedAnnealing(
                 self.obj_func, 
                 self.rpc,
-                T_max=1e-4, 
+                T_max=1e-2, 
                 T_min=1e-10, 
                 L=10, 
-                max_stay_counter=1000,
+                max_stay_counter=500,
                 silent=False
             )
 
     def obj_func(self, x: RoutingPatternCode) -> float:
         '''
-        objective function for optimization algorithms.
+        Objective function for optimization algorithms.
         the function is implemented here rather than in algorithm classes
         because the function is generic for all algorithms (such as SA and GA),
         and it needs global variables in `RoutingDesigner` to execute. 
         '''
-        x.decode()
+        x.decode() # this step is necessary
         freq_dict = {}
 
         for path in x.path_dict.values():
@@ -85,6 +85,9 @@ class RoutingDesigner(object):
 
     def run_routing(self) -> None:
         self.rpc = self.routing_engine()
+
+    def reset(self) -> None:
+        self.routing_engine.reset()
 
     @property
     def routing_result(self) -> RoutingResult:

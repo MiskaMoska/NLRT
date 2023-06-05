@@ -35,6 +35,9 @@ class BaseDRE(Callable, metaclass=ABCMeta):
 
         # empty decode queue to avoid mis-decoding after constructing trees
         self.rpc.empty_decode_queue()
+    
+    def reset(self) -> None: ...
+
 
 class DyxyDLE(BaseDRE):
 

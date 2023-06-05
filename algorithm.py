@@ -22,7 +22,7 @@ class BaseSimulatedAnnealing(Generic[Solution], Callable, metaclass=ABCMeta):
         *args, **kwargs
     ) -> None:
         '''
-        Base class for Simulated Annealing
+        Base Class for Simulated Annealing Algorithm.
         This class is borrowed from the version of scikit-opt
         https://github.com/guofei9987/scikit-opt/blob/master/sko/SA.py
         with some application-specific modifications.
@@ -90,18 +90,17 @@ class BaseSimulatedAnnealing(Generic[Solution], Callable, metaclass=ABCMeta):
         stay_counter = 0
 
         while True:
-            if not self.silent:
-                print("temperature: ", self.T, end="\t")
-                print("y_value: ", self.best_y, end="\t")
-                print("stay_counter: ", stay_counter)
-
+            accept_probs = []
             for i in range(self.L):
                 self.update(x_current)
                 y_new = self.func(x_current)
-
-                # Metropolis
                 df = y_new - y_current
-                if df < 0 or np.exp(-df / self.T) > np.random.rand(): # accept new x
+
+                if df > 1e-8: # get a worse
+                    accept_prob = np.exp(-df / self.T)
+                    accept_probs.append(accept_prob)
+
+                if df < 0 or (df > 1e-8 and (np.random.random() < accept_prob)): # accept new x
                     y_current = y_new
                     if y_new < self.best_y: # record best x
                         self.best_x = deepcopy(x_current)
@@ -109,6 +108,18 @@ class BaseSimulatedAnnealing(Generic[Solution], Callable, metaclass=ABCMeta):
 
                 else: # discard new x
                     self.undo_update(x_current)
+
+            if not self.silent:
+                if len(accept_probs) == 0:
+                    log_accept_prob = 'N'
+                else: log_accept_prob = round(np.average(accept_probs), 4)
+
+                print('%-13s%-25s%-13s%-12s%-9s%-11s%-10s%-10s' % (
+                    'temperature:', self.T,
+                    'accept_prob:', log_accept_prob,
+                    'y_value:', round(self.best_y, 4),
+                    'stay_cnt:', stay_counter
+                ))
 
             self.iter_cycle += 1
             self.cool_down()
@@ -127,6 +138,13 @@ class BaseSimulatedAnnealing(Generic[Solution], Callable, metaclass=ABCMeta):
                 break
 
         return self.best_x
+    
+    def reset(self) -> None:
+        self.best_x.reset()
+        self.best_y = self.func(self.best_x)
+        self.T = self.T_max
+        self.iter_cycle = 0
+        self.generation_best_Y = [self.best_y]
 
 
 class LayoutSimulatedAnnealing(BaseSimulatedAnnealing[LayoutPatternCode]):
@@ -151,3 +169,4 @@ class RoutingSimulatedAnnealing(BaseSimulatedAnnealing[RoutingPatternCode]):
 
     def cool_down(self) -> None:
         self.T = self.T_max / (1 + np.log(1 + self.iter_cycle))
+        # self.T *= 0.99

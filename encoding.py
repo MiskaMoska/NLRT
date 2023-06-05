@@ -7,6 +7,7 @@ import networkx as nx
 from typing import List, Tuple, Literal, Any
 from functools import cached_property
 from maptools.core import CTG
+import numpy as np
 from acg import ACG
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
@@ -515,15 +516,24 @@ class RoutingPatternCode(BaseCode):
             self.comms.append(c)
             self.src_dict[c] = physrc
             self.sid_dict[c] = sid
-        
-        # inintialize update queue
-        for comm in self.comms:
-            self.decode_queue.append(comm)
-        
+
+        self.choice_probs = self.gen_choice_probs()
         self.reset()
 
+    def gen_choice_probs(self) -> List[float]:
+        '''
+        Through experiments we found that Linear probability distribution 
+        performs better than exponential probability distribution.
+        '''
+        node_nums = [len(self.term_dict[k]) for k in self.comms]
+        # exp_list = np.exp(np.array(node_nums))
+        # exp_sum = np.sum(exp_list)
+        exp_list = node_nums
+        exp_sum = sum(node_nums)
+        return [exp / exp_sum for exp in exp_list]
+
     def mutation(self) -> None:
-        comm = random.choice(self.comms)
+        comm, *_ = random.choices(self.comms, weights=self.choice_probs)
         target_stc = self.stc_dict[comm]
         self.bak_comm = comm
         self.bak_stc = deepcopy(target_stc)
@@ -549,7 +559,12 @@ class RoutingPatternCode(BaseCode):
             self.stc_dict[comm] = random_steiner_tree_code(
                 term_nodes, self.all_nodes
             )
+        self.fill_decode_queue()
     
     def empty_decode_queue(self) -> None:
         self.decode_queue = []
+
+    def fill_decode_queue(self) -> None:
+        for comm in self.comms:
+            self.decode_queue.append(comm)
             
