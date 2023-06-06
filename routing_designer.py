@@ -20,8 +20,8 @@ class RoutingDesigner(object):
         dre: Optional[DREMethod] = None
     ) -> None:
         '''
-        Tile-NoC Layout Designer
-        Determines the 1-to-1 mapping between logical tile and physical tiles
+        Tile-NoC Routing Designer
+        Determines the routing paths for each communication connection.
 
         Parameter
         ---------
