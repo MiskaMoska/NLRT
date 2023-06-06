@@ -6,20 +6,19 @@ from abc import ABCMeta, abstractmethod
 import random
 from copy import deepcopy, copy
 
-Solution = TypeVar('Solution')
+_Solution = TypeVar('_Solution')
 
-class BaseSimulatedAnnealing(Generic[Solution], Callable, metaclass=ABCMeta):
+class BaseSimulatedAnnealing(Generic[_Solution], Callable, metaclass=ABCMeta):
 
     def __init__(
         self, 
-        func: Callable[[Solution], float], 
-        x0: Solution, 
+        func: Callable[[_Solution], float], 
+        x0: _Solution, 
         T_max: float = 100,
         T_min: float = 1e-7, 
         L: int = 300, 
         max_stay_counter: int = 150,
-        silent: bool = False,
-        *args, **kwargs
+        silent: bool = False
     ) -> None:
         '''
         Base Class for Simulated Annealing Algorithm.
@@ -29,12 +28,12 @@ class BaseSimulatedAnnealing(Generic[Solution], Callable, metaclass=ABCMeta):
         
         Parameters
         ----------
-        func: Callable[[Solution], float]
+        func: Callable[[_Solution], float]
             the objective function to be optimized.
             this function must have a scalar-value output
             and the goal is to minimize (not maximize) the function output.
             
-        x0: Solution
+        x0: _Solution
             initial solution, must be the same type with the input of `func`.
 
         T_max: float
@@ -52,7 +51,7 @@ class BaseSimulatedAnnealing(Generic[Solution], Callable, metaclass=ABCMeta):
         silent: bool
             whether to run without logging to the terminal.
         '''
-        super().__init__(*args, **kwargs)
+        super().__init__()
 
         self.func = func
         assert T_max > T_min > 0, 'T_max > T_min > 0'
@@ -74,18 +73,18 @@ class BaseSimulatedAnnealing(Generic[Solution], Callable, metaclass=ABCMeta):
         return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
     @abstractmethod
-    def update(self, x: Solution) -> None: ...
+    def update(self, x: _Solution) -> None: ...
 
     @abstractmethod
-    def undo_update(self, x: Solution) -> None: ...
+    def undo_update(self, x: _Solution) -> None: ...
 
     @abstractmethod
     def cool_down(self) -> None: ...
 
-    def __call__(self) -> Solution:
+    def __call__(self) -> _Solution:
         return self.run()
 
-    def run(self) -> Solution:
+    def run(self) -> _Solution:
         x_current, y_current = self.best_x, self.best_y
         stay_counter = 0
 

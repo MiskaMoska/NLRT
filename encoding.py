@@ -227,8 +227,7 @@ class SteinerTreeCode(BaseCode, nx.Graph):
         spis: List[bool], 
         root: PhysicalTile,
         term_nodes: List[PhysicalTile],
-        all_nodes: List[PhysicalTile],
-        *args, **kwargs
+        all_nodes: List[PhysicalTile]
     ) -> None:
         '''
         Encoded Data Structure for Steiner Tree.
@@ -276,11 +275,12 @@ class SteinerTreeCode(BaseCode, nx.Graph):
             raise RuntimeError(
                 f"root {root} not in terminal nodes: {term_nodes}")
 
+        super().__init__()
+        super(BaseCode, self).__init__()
+
         self.root = root
         self.all_nodes = all_nodes
         self.term_nodes = term_nodes
-        
-        super().__init__(*args, **kwargs)
         self.add_nodes_from(all_nodes)
 
         for (edge, spi) in zip(edges, spis):
