@@ -12,7 +12,7 @@ class BaseDRE(Callable, metaclass=ABCMeta):
     '''
     Base Class for Deterministic Routing Engine
     '''
-    def __init__(self, rpc: RoutingPatternCode) -> None:
+    def __init__(self, rpc: RoutingPatternCode, *args, **kwargs) -> None:
         super().__init__()
         self.rpc = rpc
 

@@ -79,23 +79,64 @@ class LayoutResult(object):
 
     def draw_fdp(
         self, fdp: ZGraph,
-        width: str = '0.8',
-        penwidth: str = '5',
-        fontsize: str ='24',
-        dist: int = 1
+        mode: Literal['point', 'square_s', 'square_l'] = 'square_l'
     ) -> None:
+        dist = 1.8 if mode == 'square_s' else 1
+        drawed_set = set()
+
+        # draw the mapped tiles
         for cir, pidx in self.map.items():
             phytile = self.phy_dict[pidx]
             pos = f'{phytile[0] * dist},{-phytile[1] * dist}!'
+            drawed_set.add(phytile)
+            self._draw_one_node(fdp, cir, phytile, pos, mode=mode)
+        
+        # draw the rest of the tiles that has not been mapped to
+        for phytile in self.phy_dict.values():
+            if phytile not in drawed_set:
+                pos = f'{phytile[0] * dist},{-phytile[1] * dist}!'
+                self._draw_one_node(fdp, None, phytile, pos, mode=mode, passive=True)
+
+    def _draw_one_node(
+        self, fdp: ZGraph, *args,
+        mode: Literal['point', 'square_s', 'square_l'] = 'square_l',
+        passive: bool = False
+    ) -> None:
+        cir, phytile, pos, *_ = args
+        if mode == 'point':
             fdp.node(
                 str(phytile), 
-                f'C{cir[0]}', 
-                color=self.colors[cir[0]],
-                fontcolor=self.colors[cir[0]],
+                '',
+                pos=pos,
+                shape='point',
+                width='0.24',
+                height='0.24'
+            )
+
+        elif mode == 'square_s':
+            fdp.node(
+                str(phytile), 
+                'NULL' if passive else f'C{cir[0]}', 
+                color='grey' if passive else self.colors[cir[0]],
+                fontcolor='grey' if passive else self.colors[cir[0]],
                 pos=pos,
                 shape='square',
-                width=width,
-                penwidth=penwidth,
-                fontsize=fontsize,
+                width='1',
+                penwidth='5',
+                fontsize='24',
+                fontname='Arial'
+            )
+            
+        elif mode == 'square_l':
+            fdp.node(
+                str(phytile), 
+                'NULL' if passive else f'C{cir[0]}', 
+                color='grey' if passive else self.colors[cir[0]],
+                fontcolor='grey' if passive else self.colors[cir[0]],
+                pos=pos,
+                shape='square',
+                width='0.8',
+                penwidth='5',
+                fontsize='24',
                 fontname='Arial'
             )

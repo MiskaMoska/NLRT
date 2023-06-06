@@ -43,13 +43,7 @@ class RoutingResult(object):
     def draw(self) -> None:
         fdp = ZDigraph('routing', engine='fdp', format='pdf')
         # draw layout tiles
-        self.layout.draw_fdp(
-            fdp,
-            width='1',
-            penwidth='5',
-            fontsize='24',
-            dist=1.8
-        )
+        self.layout.draw_fdp(fdp, mode='point')
         # draw routing paths
         for i, path in enumerate(self.path_dict.values()):
             for edge in path:

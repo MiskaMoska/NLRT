@@ -17,7 +17,8 @@ class RoutingDesigner(object):
         ctg: CTG, 
         acg: ACG, 
         layout: LayoutResult,
-        dre: Optional[DREMethod] = None
+        dre: Optional[DREMethod] = None,
+        **kwargs
     ) -> None:
         '''
         Tile-NoC Routing Designer
@@ -41,14 +42,18 @@ class RoutingDesigner(object):
             When `dre` is not None, it must be one of the predefined DREs, and the 
             optimization algorithm is disabled, while the task of routing is handed 
             over to the specified DRE.
+
+        dummy_sa: bool
+            never accept worse solutions while running SA algorithm.
+            this option is only for OLE, for DLE, this option will be neglected.
         '''
         self.noc_w = acg.w
         self.noc_h = acg.h
         self.layout = layout
         self.rpc = RoutingPatternCode(ctg, acg, layout)
-        self._init_routing_engine(dre)
+        self._init_routing_engine(dre, **kwargs)
 
-    def _init_routing_engine(self, dre: Optional[DREMethod]) -> None:
+    def _init_routing_engine(self, dre: Optional[DREMethod], **kwargs) -> None:
         if dre is not None: # use determininstic routing engine
             self.routing_engine = __DRE_ACCESS_TABLE__[dre](self.rpc)
 
@@ -60,7 +65,8 @@ class RoutingDesigner(object):
                 T_min=1e-10, 
                 L=10, 
                 max_stay_counter=500,
-                silent=False
+                silent=False,
+                **kwargs
             )
 
     def obj_func(self, x: RoutingPatternCode) -> float:
@@ -80,7 +86,7 @@ class RoutingDesigner(object):
                 freq_dict[edge] += 1
         
         conflicts = list(freq_dict.values())
-        return sum(conflicts) / len(conflicts) + max(conflicts) - 1
+        return (sum(conflicts) / len(conflicts)) * max(conflicts)
         # return max(conflicts)
 
     def run_routing(self) -> None:

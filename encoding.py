@@ -292,10 +292,7 @@ class SteinerTreeCode(BaseCode, nx.Graph):
         self.node_color[self.root] = 'green'
 
     def mutation(self) -> None:
-        method = random.choice([True, False])
-        method = True
-        # print(f"mutation method: ", "edge replacement" if method else "root relocation")
-
+        method = True if random.random() < 0.7 else False
         if method: # replace edge
             edge = random.choice(list(self.edges))
             self.remove_edge(*edge) # remove an edge randomly
@@ -312,10 +309,9 @@ class SteinerTreeCode(BaseCode, nx.Graph):
             while True:
                 r = random.choice(self.term_nodes)
                 if r != self.root: break
-
+            self.root = r
             # self.node_color[self.root] = 'red'
             # self.node_color[r] = 'green'
-            # self.root = r
 
     def undo_mutation(self) -> None:
         '''

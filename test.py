@@ -8,6 +8,10 @@ from layout_designer import LayoutDesigner
 from routing_designer import RoutingDesigner
 from encoding import RoutingPatternCode
 from maptype import DLEMethod, DREMethod
+from layout_result import LayoutResult
+import pickle
+import matplotlib
+from matplotlib import pyplot as plt
 
 # 读取onnx模型，注意你自己的路径
 nvcim_root = os.environ.get('NVCIM_HOME')
@@ -41,31 +45,53 @@ ctg = tm.ctg
 
 # ctg.plot_ctg()
 
-acg = ACG(14, 14)
-ld = LayoutDesigner(ctg, acg, dle=DLEMethod.REVERSE_S)
+acg = ACG(13, 13)
+# ld = LayoutDesigner(ctg, acg, dle=DLEMethod.REVERSE_S)
 
-ld.run_layout()
-layout = ld.layout_result
+# ld.run_layout()
+# layout = ld.layout_result
 
-rd = RoutingDesigner(ctg, acg, layout, dre=None)
-rd.run_routing()
+with open('cases/layout_case_1.pkl', 'rb') as f:
+    # pickle.dump(layout, f)
+    layout = pickle.load(f)
 
-routing = rd.routing_result
-print(routing.max_conflicts)
+########################################################
+# rd = RoutingDesigner(ctg, acg, layout, dre=None, dummy_sa=False)
+# rd.run_routing()
+
+# routing = rd.routing_result
+# print(routing.max_conflicts)
 
 # layout.draw()
-routing.draw()
+# routing.draw()
 
-# rd = RoutingDesigner(ctg, acg, layout, dre=None)
+# ys = rd.routing_engine.generation_best_Y
+# with open('data/real_4.pkl', 'wb') as f:
+#     pickle.dump(ys, f)
 
-# max = 1000
-# cnt = 0
-# while True:
-#     rd.run_routing()
-#     now_max = rd.obj_func(rd.rpc)
-#     if now_max < max:
-#         max = now_max
-#     print(cnt, '\t', max)
-#     rd.reset()
-#     cnt += 1
+
+########################################################
+rd = RoutingDesigner(ctg, acg, layout, dre=DREMethod.DYXY)
+
+max = 1000
+cnt = 0
+res = []
+while True:
+    rd.run_routing()
+    now_max = rd.obj_func(rd.rpc)
+    if now_max < max:
+        max = now_max
+    print(cnt, '\t', max)
+    rd.reset()
+
+    if cnt % 10 == 0:
+        res.append(max)
+
+    cnt += 1
+    if cnt == 16000:
+        break
+
+with open('data/rand_4.pkl', 'wb') as f:
+    pickle.dump(res, f)
+
 

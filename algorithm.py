@@ -18,7 +18,8 @@ class BaseSimulatedAnnealing(Generic[_Solution], Callable, metaclass=ABCMeta):
         T_min: float = 1e-7, 
         L: int = 300, 
         max_stay_counter: int = 150,
-        silent: bool = False
+        silent: bool = False,
+        **kwargs
     ) -> None:
         '''
         Base Class for Simulated Annealing Algorithm.
@@ -50,6 +51,9 @@ class BaseSimulatedAnnealing(Generic[_Solution], Callable, metaclass=ABCMeta):
 
         silent: bool
             whether to run without logging to the terminal.
+
+        dummy_sa: bool
+            never accept worse solutions. 
         '''
         super().__init__()
 
@@ -58,6 +62,9 @@ class BaseSimulatedAnnealing(Generic[_Solution], Callable, metaclass=ABCMeta):
         self.T_max = T_max # initial temperature
         self.T_min = T_min # end temperature
         self.L = int(L) # num of iteration under every temperature（also called Long of Chain
+
+        self.dummy_sa = False
+        self.__dict__.update(kwargs)
         
         # stop if best_y stay unchanged over max_stay_counter times (also called cooldown time)
         self.max_stay_counter = max_stay_counter
@@ -95,11 +102,14 @@ class BaseSimulatedAnnealing(Generic[_Solution], Callable, metaclass=ABCMeta):
                 y_new = self.func(x_current)
                 df = y_new - y_current
 
-                if df > 1e-8: # get a worse
+                if (not self.dummy_sa) and df > 0: # get a worse
                     accept_prob = np.exp(-df / self.T)
                     accept_probs.append(accept_prob)
 
-                if df < 0 or (df > 1e-8 and (np.random.random() < accept_prob)): # accept new x
+                if df < 0 or (
+                    (not self.dummy_sa) and 
+                    (df > 0 and (np.random.random() < accept_prob))
+                ): # accept new x
                     y_current = y_new
                     if y_new < self.best_y: # record best x
                         self.best_x = deepcopy(x_current)
@@ -135,6 +145,8 @@ class BaseSimulatedAnnealing(Generic[_Solution], Callable, metaclass=ABCMeta):
 
             if stay_counter > self.max_stay_counter:
                 break
+        
+        print('num_best_cases:', len(self.generation_best_Y))
 
         return self.best_x
     
